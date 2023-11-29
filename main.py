@@ -34,7 +34,7 @@ def is_user_member(chat_id, user_id):
 
 # Function for /start message
 def get_main_menu_markup():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, is_persistent=True)
     button_check = types.KeyboardButton(text='🔍 Найти соседа')
     button_reg = types.KeyboardButton(text='✍️ Регистрация')
     button_del = types.KeyboardButton(text='🗑️ Удалить регистрацию')
@@ -57,10 +57,11 @@ def handle_apartment(message):
         user_id = message.from_user.id
         apartment_number = int(message.text)
         if apartment_number not in range(1, 536):
-            bot.send_message(message.from_user.id, 'Пожалуйста, введите корректный номер квартиры', reply_markup=get_main_menu_markup())
+            bot.send_message(message.from_user.id, 'Пожалуйста, введите корректный номер квартиры (от 1 до 535)', reply_markup=get_main_menu_markup())
         else:
-            name = message.from_user.first_name + ' ' + message.from_user.last_name
-            username = message.from_user.username
+            last_name = message.from_user.last_name if message.from_user.last_name is not None else ""
+            name = f"{message.from_user.first_name} {last_name}"
+            username = f"@{message.from_user.username}" if message.from_user.username is not None else f"[user](tg://user?id={user_id})"
             reg_user(user_id, name, username, apartment_number)  # Функция сохранения данных пользователя
             set_user_state(message.from_user.id, None)  # Сброс состояния пользователя
     except ValueError as e:
@@ -100,8 +101,8 @@ def check_apartment(message):
             else:
 
                 for person in user_data:
-                    mess = f"{person[0]} - @{person[1]}"
-                    bot.send_message(user_id, mess, reply_markup=get_main_menu_markup())
+                    mess = f"{person[0]} - {person[1]}"
+                    bot.send_message(user_id, mess, parse_mode='Markdown', reply_markup=get_main_menu_markup())
 
         except sqlite3.Error as error:
             print("Ошибка при подключении к sqlite", error)
@@ -213,7 +214,7 @@ def process_user_message(message):
 
     if message.text == '/start':
         print("Выбрана команда старт")
-        first_mess = (f"<b>{message.from_user.first_name} {message.from_user.last_name}</b>, привет!\nЧто вы "
+        first_mess = (f"<b>{message.from_user.first_name}</b>, привет!\nЧто вы "
                       f"хотите сделать?")
         bot.send_message(message.chat.id, first_mess, parse_mode='html', reply_markup=get_main_menu_markup())
 
