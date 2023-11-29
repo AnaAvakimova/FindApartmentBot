@@ -2,13 +2,14 @@ import telebot
 from telebot import types
 import os
 import sqlite3
-from menu import get_main_menu_markup, confirm_deletion
+from menu import get_main_menu_markup, confirm_deletion, confirm_registration
 
 bot_key = os.environ.get('TELEBOT_KEY')
 bot = telebot.TeleBot(bot_key)
 group_id = os.environ.get('CHAT_ID')
 
 USER_STATE = {}  # dictionary for tracking user state
+user_registration_data = {}
 apartment = 0
 
 
@@ -55,8 +56,8 @@ def handle_apartment(message):
             last_name = message.from_user.last_name if message.from_user.last_name is not None else ""
             name = f"{message.from_user.first_name} {last_name}"
             username = f"@{message.from_user.username}" if message.from_user.username is not None else f"[user](tg://user?id={user_id})"
-            reg_user(user_id, name, username, apartment_number)  # Функция сохранения данных пользователя
-            set_user_state(message.from_user.id, None)  # Сброс состояния пользователя
+            user_registration_data[user_id] = {'name': name, 'username': username, 'apartment': apartment_number}
+            confirm_registration(user_id, apartment_number)
     except ValueError as e:
         print('Номер квартиры был введен в некорректном формате', e)
         second_mess = 'Пожалуйста, укажите только номер (число):'
@@ -203,9 +204,23 @@ def delete_registration(message):
 
 
 # Registration
-@bot.message_handler(func=lambda message: get_user_state(message) == "filled_apartment")
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_registration"))
+def callback_confirm_registration(call):
+    print("Сработал обработчик: callback_confirm_registration")
+    user_id = call.from_user.id
+    if call.data == "confirm_registration_yes":
+        print('Пользователь решил продолжить регистрацию')
+        data = user_registration_data[user_id]
+        reg_user(user_id, data['name'], data['username'], data['apartment'])
+    elif call.data == "confirm_registration_no":
+        print('Пользователь решил не продолжать регистрацию')
+        second_mess = "Действие отменено."
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+    set_user_state(user_id, None)
+
+
 def reg_user(user_id, name, username, apartment_number):
-    print("Сработал обработчик: reg_user")
+    print("Сработал обработчик: reg user")
     # connect to the database
     try:
         connection = sqlite3.connect('ostrov_database.db')
