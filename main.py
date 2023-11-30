@@ -1,5 +1,4 @@
 import telebot
-from telebot import types
 import os
 import sqlite3
 from menu import get_main_menu_markup, confirm_deletion, confirm_registration
@@ -34,7 +33,7 @@ def is_user_member(chat_id, user_id):
         return False
 
 
-# Ask user for their apartment during registration
+# Registration process
 def ask_apartment(message):
     print("Отправляю запрос на номер квартиры")
     bot.send_message(message.from_user.id, "Какой у вас номер квартиры? Только номер, без текста и пробелов:",
@@ -64,6 +63,55 @@ def handle_apartment(message):
         bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
 
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_registration"))
+def callback_confirm_registration(call):
+    print("Сработал обработчик: callback_confirm_registration")
+    user_id = call.from_user.id
+    if call.data == "confirm_registration_yes":
+        print('Пользователь решил продолжить регистрацию')
+        data = user_registration_data[user_id]
+        reg_user(user_id, data['name'], data['username'], data['apartment'])
+    elif call.data == "confirm_registration_no":
+        print('Пользователь решил не продолжать регистрацию')
+        second_mess = "Действие отменено."
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+    set_user_state(user_id, None)
+
+
+def reg_user(user_id, name, username, apartment_number):
+    print("Сработал обработчик: reg user")
+    # connect to the database
+    try:
+        connection = sqlite3.connect('ostrov_database.db')
+        cursor = connection.cursor()
+        print('База данных подключена к SQLite')
+
+        # add new user to the database
+        sqlite_insert_query = """INSERT INTO Users
+                              (user_id, name, username, apartment)
+                              VALUES
+                              (?, ?, ?, ?);"""
+        values_to_insert = (user_id, name, username, apartment_number)
+        cursor.execute(sqlite_insert_query, values_to_insert)
+        connection.commit()
+        second_mess = 'Пользователь успешно зарегистрирован'
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+
+    except sqlite3.IntegrityError as error:
+        print("Такой пользователь уже зарегистрирован", error)
+        second_mess = 'Вы уже зарегистрированы.'
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+    except sqlite3.Error as error:
+        print("Ошибка при подключении к sqlite", error)
+        second_mess = 'Произошла ошибка при регистрации'
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+
+    finally:
+        if (connection):
+            connection.close()
+            print("Соединение с SQLite закрыто")
+
+
 # Find user by their apartment
 def check_user(message):
     print("Отправляю запрос на номер квартиры")
@@ -90,6 +138,24 @@ def check_apartment(message):
             cursor.execute("SELECT name, username FROM Users WHERE apartment = ?", (apartment_number,))
             user_data = cursor.fetchall()
             print(f"Полученные данные из базы - {user_data}")
+
+            # Tracking count of checks made by the user for security purposes
+            cursor.execute("SELECT user_id FROM Users_check WHERE user_id = ?", (user_id,))
+            users_check_id = cursor.fetchone()
+            if not users_check_id:
+                cursor.execute("INSERT INTO Users_check (user_id) VALUES (?)", (user_id,))
+
+            cursor.execute("UPDATE Users_check SET count_check = count_check + 1 WHERE user_id = ?", (user_id,))
+            connection.commit()
+            cursor.execute("SELECT count_check FROM Users_check WHERE user_id = ?", (user_id,))
+            count_check = cursor.fetchone()
+            print(count_check[0])
+            mess = f"Пользователь tg://user?id={user_id} отправил {count_check[0]} запросов на проверку"
+            if count_check[0] > 99:
+                bot.send_message(448757359,mess)
+                second_mess = 'Извините, но вы превысили лимит на проверку. Чтобы вас разблокировали, отправьте сообщение @DeniDoman'
+                bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+                return
             if not user_data:
                 second_mess = 'Извините, такой пользователь не зарегистрирован.'
                 bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
@@ -114,6 +180,10 @@ def check_apartment(message):
         print('Номер квартиры был введен в некорректном формате', e)
         second_mess = 'Пожалуйста, укажите только номер (число):'
         bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
+
+
+
+
 
 
 # Delete registration
@@ -201,56 +271,6 @@ def delete_registration(message):
             connection.close()
             print("Соединение с SQLite закрыто")
         set_user_state(user_id, None)  # Сброс состояния пользователя
-
-
-# Registration
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_registration"))
-def callback_confirm_registration(call):
-    print("Сработал обработчик: callback_confirm_registration")
-    user_id = call.from_user.id
-    if call.data == "confirm_registration_yes":
-        print('Пользователь решил продолжить регистрацию')
-        data = user_registration_data[user_id]
-        reg_user(user_id, data['name'], data['username'], data['apartment'])
-    elif call.data == "confirm_registration_no":
-        print('Пользователь решил не продолжать регистрацию')
-        second_mess = "Действие отменено."
-        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
-    set_user_state(user_id, None)
-
-
-def reg_user(user_id, name, username, apartment_number):
-    print("Сработал обработчик: reg user")
-    # connect to the database
-    try:
-        connection = sqlite3.connect('ostrov_database.db')
-        cursor = connection.cursor()
-        print('База данных подключена к SQLite')
-
-        # add new user to the database
-        sqlite_insert_query = """INSERT INTO Users
-                              (user_id, name, username, apartment)
-                              VALUES
-                              (?, ?, ?, ?);"""
-        values_to_insert = (user_id, name, username, apartment_number)
-        cursor.execute(sqlite_insert_query, values_to_insert)
-        connection.commit()
-        second_mess = 'Пользователь успешно зарегистрирован'
-        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
-
-    except sqlite3.IntegrityError as error:
-        print("Такой пользователь уже зарегистрирован", error)
-        second_mess = 'Вы уже зарегистрированы.'
-        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
-    except sqlite3.Error as error:
-        print("Ошибка при подключении к sqlite", error)
-        second_mess = 'Произошла ошибка при регистрации'
-        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
-
-    finally:
-        if (connection):
-            connection.close()
-            print("Соединение с SQLite закрыто")
 
 
 # Handle all messages with content_type 'text' and check if the user is in the group

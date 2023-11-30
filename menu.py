@@ -32,7 +32,7 @@ def confirm_registration(user_id, apartment):
     yes_button = types.InlineKeyboardButton(text='Да', callback_data='confirm_registration_yes')
     no_button = types.InlineKeyboardButton(text='Нет', callback_data='confirm_registration_no')
     markup.add(yes_button, no_button)
-    message = f'Вы подтверждаете, что хотите зарегистрироваться под квартирой {apartment}?'
+    message = f'Вы подтверждаете, что хотите зарегистрироваться в квартире {apartment}?'
     bot.send_message(user_id, text=message, reply_markup=markup)
 
 
