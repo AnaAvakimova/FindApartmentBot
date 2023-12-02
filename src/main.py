@@ -73,8 +73,7 @@ def is_user_member(chat_id, user_id):
 # Registration process
 def ask_apartment(message):
     print("Отправляю запрос на номер квартиры")
-    bot.send_message(message.from_user.id, "Какой у вас номер квартиры? Только номер, без текста и пробелов:",
-                     reply_markup=get_main_menu_markup())
+    bot.send_message(message.from_user.id, "Какой у вас номер квартиры? Только номер, без текста и пробелов:")
     set_user_state(message.from_user.id, "awaiting_apartment")
 
 
@@ -113,6 +112,9 @@ def callback_confirm_registration(call):
         second_mess = "Действие отменено."
         bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
     set_user_state(user_id, None)
+    # Deletion of buttons
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=call.message.text,
+                          reply_markup=None)
 
 
 def reg_user(user_id, name, username, apartment_number):
@@ -152,8 +154,7 @@ def reg_user(user_id, name, username, apartment_number):
 # Find user by their apartment
 def check_user(message):
     print("Отправляю запрос на номер квартиры")
-    bot.send_message(message.from_user.id, "Укажите номер квартиры соседа. Только номер, без текста и пробелов:",
-                     reply_markup=get_main_menu_markup())
+    bot.send_message(message.from_user.id, "Укажите номер квартиры соседа. Только номер, без текста и пробелов:")
     set_user_state(message.from_user.id, "checking_apartment")
 
 
@@ -254,8 +255,7 @@ def callback_confirm_deletion(call):
     # User decided to delete registration
     if call.data == "confirm_deletion_yes":
         print("Отправляю запрос на номер квартиры")
-        bot.send_message(call.from_user.id, "Укажите номер квартиры для удаления. Только номер, без текста:",
-                         reply_markup=get_main_menu_markup())
+        bot.send_message(call.from_user.id, "Укажите номер квартиры для удаления. Только номер, без текста:")
         set_user_state(call.from_user.id, "delete_registration")
     # User decided not to delete registration
     elif call.data == "confirm_deletion_no":
