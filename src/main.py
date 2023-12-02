@@ -10,7 +10,7 @@ admin = os.environ.get('ADMIN')
 tg_user_id = os.environ.get('TG_USER_ID')
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-db_path = os.path.join(dir_path, '../db/ostrov_database.db')
+db_path = os.environ.get('DB_PATH')
 
 USER_STATE = {}  # dictionary for tracking user state
 user_registration_data = {}
@@ -30,7 +30,6 @@ def set_user_state(user_id, state):
 
 
 def create_db(directory_path):
-    db_path = os.path.join(directory_path, "ostrov_database.db")
     # create database and tables if not exists
     if os.path.exists(db_path):
         return
