@@ -119,6 +119,7 @@ def callback_confirm_registration(call):
 
 def reg_user(user_id, name, username, apartment_number):
     print("Сработал обработчик: reg user")
+    connection = None
     # connect to the database
     try:
         connection = sqlite3.connect(db_path)
@@ -146,7 +147,7 @@ def reg_user(user_id, name, username, apartment_number):
         bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
 
     finally:
-        if (connection):
+        if connection:
             connection.close()
             print("Соединение с SQLite закрыто")
 
@@ -161,6 +162,7 @@ def check_user(message):
 @bot.message_handler(func=lambda message: get_user_state(message) == 'checking_apartment')
 def check_apartment(message):
     print("Сработал обработчик: check_apartment")
+    connection = None
     try:
         print('Запущена функция выдачу данных о квартире')
         apartment_number = int(message.text)
@@ -213,7 +215,7 @@ def check_apartment(message):
         bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
 
     finally:
-        if (connection):
+        if connection:
             connection.close()
             print("Соединение с SQLite закрыто")
         set_user_state(user_id, None)  # Сброс состояния пользователя
@@ -222,6 +224,7 @@ def check_apartment(message):
 # Delete registration
 def delete_registration_check(message):
     # connect to the database
+    connection = None
     try:
         connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
@@ -244,7 +247,7 @@ def delete_registration_check(message):
         bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
 
     finally:
-        if (connection):
+        if connection:
             connection.close()
             print("Соединение с SQLite закрыто")
 
@@ -273,6 +276,7 @@ def callback_confirm_deletion(call):
 def delete_registration(message):
     print('Сработал обработчик delete_registration')
     # connect to the database
+    connection = None
     try:
         connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
@@ -299,7 +303,7 @@ def delete_registration(message):
         bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
 
     finally:
-        if (connection):
+        if connection:
             connection.close()
             print("Соединение с SQLite закрыто")
         set_user_state(user_id, None)  # Сброс состояния пользователя
