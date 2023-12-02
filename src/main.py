@@ -6,6 +6,11 @@ from menu import get_main_menu_markup, confirm_deletion, confirm_registration
 bot_key = os.environ.get('TELEBOT_KEY')
 bot = telebot.TeleBot(bot_key)
 group_id = os.environ.get('CHAT_ID')
+admin = os.environ.get('ADMIN')
+tg_user_id = os.environ.get('TG_USER_ID')
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+db_path = os.path.join(dir_path, '../db/ostrov_database.db')
 
 USER_STATE = {}  # dictionary for tracking user state
 user_registration_data = {}
@@ -22,6 +27,39 @@ def set_user_state(user_id, state):
     USER_STATE[user_id] = state
     print(f"Установка статуса пользователя - {USER_STATE[user_id]}")
     print(USER_STATE)
+
+
+def create_db(directory_path):
+    db_path = os.path.join(directory_path, "ostrov_database.db")
+    # create database and tables if not exists
+    if os.path.exists(db_path):
+        return
+
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+    create_table_users = '''CREATE TABLE IF NOT EXISTS USERS (
+                        name TEXT,
+                        username TEXT,
+                        additional_info TEXT,
+                        apartment INTEGER,
+                        user_id INTEGER
+                        );'''
+
+    create_table_users_check = '''CREATE TABLE IF NOT EXISTS Users_check (
+                        user_id INTEGER PRIMARY KEY,
+                        count_check INTEGER DEFAULT 0
+                        );'''
+
+    try:
+        cursor.execute(create_table_users)
+        cursor.execute(create_table_users_check)
+        connection.commit()
+    except sqlite3.Error as e:
+        print(f"Ошибка при создании таблиц: {e}")
+    finally:
+        connection.close()
+
+    connection.close()
 
 
 # Function to check if the user is a member
@@ -54,7 +92,7 @@ def handle_apartment(message):
         else:
             last_name = message.from_user.last_name if message.from_user.last_name is not None else ""
             name = f"{message.from_user.first_name} {last_name}"
-            username = f"@{message.from_user.username}" if message.from_user.username is not None else f"[user](tg://user?id={user_id})"
+            username = f"@{message.from_user.username}" if message.from_user.username is not None else f"[нажмите для связи](tg://user?id={user_id})"
             user_registration_data[user_id] = {'name': name, 'username': username, 'apartment': apartment_number}
             confirm_registration(user_id, apartment_number)
     except ValueError as e:
@@ -82,7 +120,7 @@ def reg_user(user_id, name, username, apartment_number):
     print("Сработал обработчик: reg user")
     # connect to the database
     try:
-        connection = sqlite3.connect('ostrov_database.db')
+        connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
 
@@ -127,70 +165,65 @@ def check_apartment(message):
         print('Запущена функция выдачу данных о квартире')
         apartment_number = int(message.text)
         user_id = message.from_user.id
-        # connect to the database
-        try:
-            connection = sqlite3.connect('ostrov_database.db')
-            cursor = connection.cursor()
-            print('База данных подключена к SQLite')
 
-            # get information about the user
-            print(f"Номер квартиры - {apartment_number}")
-            cursor.execute("SELECT name, username FROM Users WHERE apartment = ?", (apartment_number,))
-            user_data = cursor.fetchall()
-            print(f"Полученные данные из базы - {user_data}")
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        print('База данных подключена к SQLite')
 
-            # Tracking count of checks made by the user for security purposes
-            cursor.execute("SELECT user_id FROM Users_check WHERE user_id = ?", (user_id,))
-            users_check_id = cursor.fetchone()
-            if not users_check_id:
-                cursor.execute("INSERT INTO Users_check (user_id) VALUES (?)", (user_id,))
+        # get information about the user
+        print(f"Номер квартиры - {apartment_number}")
+        cursor.execute("SELECT name, username FROM Users WHERE apartment = ?", (apartment_number,))
+        user_data = cursor.fetchall()
+        print(f"Полученные данные из базы - {user_data}")
 
-            cursor.execute("UPDATE Users_check SET count_check = count_check + 1 WHERE user_id = ?", (user_id,))
-            connection.commit()
-            cursor.execute("SELECT count_check FROM Users_check WHERE user_id = ?", (user_id,))
-            count_check = cursor.fetchone()
-            print(count_check[0])
-            mess = f"Пользователь tg://user?id={user_id} отправил {count_check[0]} запросов на проверку"
-            if count_check[0] > 99:
-                bot.send_message(448757359,mess)
-                second_mess = 'Извините, но вы превысили лимит на проверку. Чтобы вас разблокировали, отправьте сообщение @DeniDoman'
-                bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
-                return
-            if not user_data:
-                second_mess = 'Извините, такой пользователь не зарегистрирован.'
-                bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
-            else:
+        # Tracking count of checks made by the user for security purposes
+        cursor.execute("SELECT user_id FROM Users_check WHERE user_id = ?", (user_id,))
+        users_check_id = cursor.fetchone()
+        if not users_check_id:
+            cursor.execute("INSERT INTO Users_check (user_id) VALUES (?)", (user_id,))
 
-                for person in user_data:
-                    mess = f"{person[0]} - {person[1]}"
-                    bot.send_message(user_id, mess, parse_mode='Markdown', reply_markup=get_main_menu_markup())
-
-        except sqlite3.Error as error:
-            print("Ошибка при подключении к sqlite", error)
-            second_mess = 'Произошла ошибка'
+        cursor.execute("UPDATE Users_check SET count_check = count_check + 1 WHERE user_id = ?", (user_id,))
+        connection.commit()
+        cursor.execute("SELECT count_check FROM Users_check WHERE user_id = ?", (user_id,))
+        count_check = cursor.fetchone()
+        print(count_check[0])
+        mess = f"Пользователь tg://user?id={user_id} отправил {count_check[0]} запросов на проверку"
+        if count_check[0] > 99:
+            bot.send_message(tg_user_id, mess)
+            second_mess = f'Извините, но вы превысили лимит на проверку. Чтобы вас разблокировали, отправьте сообщение {admin}'
             bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+            return
+        if not user_data:
+            second_mess = 'Извините, такой пользователь не зарегистрирован.'
+            bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+        else:
 
-        finally:
-            if (connection):
-                connection.close()
-                print("Соединение с SQLite закрыто")
-            set_user_state(user_id, None)  # Сброс состояния пользователя
+            for person in user_data:
+                mess = f"{person[0]} - {person[1]}"
+                bot.send_message(user_id, mess, parse_mode='Markdown', reply_markup=get_main_menu_markup())
+
+    except sqlite3.Error as error:
+        print("Ошибка при подключении к sqlite", error)
+        second_mess = 'Произошла ошибка'
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
 
     except ValueError as e:
         print('Номер квартиры был введен в некорректном формате', e)
         second_mess = 'Пожалуйста, укажите только номер (число):'
         bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
 
-
-
-
+    finally:
+        if (connection):
+            connection.close()
+            print("Соединение с SQLite закрыто")
+        set_user_state(user_id, None)  # Сброс состояния пользователя
 
 
 # Delete registration
 def delete_registration_check(message):
     # connect to the database
     try:
-        connection = sqlite3.connect('ostrov_database.db')
+        connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
 
@@ -242,7 +275,7 @@ def delete_registration(message):
     print('Сработал обработчик delete_registration')
     # connect to the database
     try:
-        connection = sqlite3.connect('ostrov_database.db')
+        connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
         # get information about the user
@@ -309,4 +342,5 @@ def process_user_message(message):
 
 
 if __name__ == '__main__':
+    create_db(dir_path)
     bot.polling(none_stop=True, interval=0)
