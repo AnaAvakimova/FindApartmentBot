@@ -3,5 +3,4 @@ db/ostrov_database.db
 ostrov_database.db.db
 ostrov_database.sqbpro
 ostrov_database.db-journal
-Dockerfile
 docker-compose.yaml
