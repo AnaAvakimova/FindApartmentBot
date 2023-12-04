@@ -1,7 +1,8 @@
 import telebot
 import os
 import sqlite3
-from menu import get_main_menu_markup, confirm_deletion, confirm_registration
+from menu import get_main_menu_markup, first_confirm_deletion, second_confirm_deletion, first_confirm_registration, \
+    second_confirm_registration
 
 bot_key = os.environ.get('TELEBOT_KEY')
 bot = telebot.TeleBot(bot_key)
@@ -10,10 +11,12 @@ admin = os.environ.get('ADMIN')
 tg_user_id = os.environ.get('TG_USER_ID')
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
+# db_path = os.path.join(dir_path, '../db/ostrov_database.db')
 db_path = os.environ.get('DB_PATH')
 
 USER_STATE = {}  # dictionary for tracking user state
 user_registration_data = {}
+user_deletion_data = {}
 apartment = 0
 
 
@@ -58,8 +61,6 @@ def create_db(directory_path):
     finally:
         connection.close()
 
-    connection.close()
-
 
 # Function to check if the user is a member
 def is_user_member(chat_id, user_id):
@@ -71,10 +72,29 @@ def is_user_member(chat_id, user_id):
 
 
 # Registration process
-def ask_apartment(message):
-    print("Отправляю запрос на номер квартиры")
-    bot.send_message(message.from_user.id, "Какой у вас номер квартиры? Только номер, без текста и пробелов:")
-    set_user_state(message.from_user.id, "awaiting_apartment")
+def registration_check(message):
+    print('Запущена функция registration_check')
+    user_id = message.from_user.id
+    first_confirm_registration(user_id)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("first_confirm_registration"))
+def callback_first_confirm_registration(call):
+    print('Сработал обработчик callback_first_confirm_registration')
+    # User decided to register
+    if call.data == "first_confirm_registration_yes":
+        print("Отправляю запрос на номер квартиры")
+        bot.send_message(call.from_user.id, "Какой у вас номер квартиры? Только номер, без текста и пробелов:")
+        set_user_state(call.from_user.id, "awaiting_apartment")
+    # User decided not to register
+    elif call.data == "first_confirm_registration_no":
+        print('Пользователь решил не регистрироваться')
+        user_id = call.from_user.id
+        second_mess = "Действие отменено."
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+    # Deletion of buttons
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=call.message.text,
+                          reply_markup=None)
 
 
 @bot.message_handler(func=lambda message: get_user_state(message) == 'awaiting_apartment')
@@ -92,23 +112,23 @@ def handle_apartment(message):
             name = f"{message.from_user.first_name} {last_name}"
             username = f"@{message.from_user.username}" if message.from_user.username is not None else f"[нажмите для связи](tg://user?id={user_id})"
             user_registration_data[user_id] = {'name': name, 'username': username, 'apartment': apartment_number}
-            confirm_registration(user_id, apartment_number)
+            second_confirm_registration(user_id, apartment_number)
     except ValueError as e:
         print('Номер квартиры был введен в некорректном формате', e)
         second_mess = 'Пожалуйста, укажите только номер (число):'
         bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_registration"))
-def callback_confirm_registration(call):
-    print("Сработал обработчик: callback_confirm_registration")
+@bot.callback_query_handler(func=lambda call: call.data.startswith("second_confirm_registration"))
+def callback_second_confirm_registration(call):
+    print("Сработал обработчик: callback_second_confirm_registration")
     user_id = call.from_user.id
-    if call.data == "confirm_registration_yes":
-        print('Пользователь решил продолжить регистрацию')
+    if call.data == "second_confirm_registration_yes":
+        print('Пользователь решил подтердить регистрацию')
         data = user_registration_data[user_id]
         reg_user(user_id, data['name'], data['username'], data['apartment'])
-    elif call.data == "confirm_registration_no":
-        print('Пользователь решил не продолжать регистрацию')
+    elif call.data == "second_confirm_registration_no":
+        print('Пользователь решил не подтверждать регистрацию')
         second_mess = "Действие отменено."
         bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
     set_user_state(user_id, None)
@@ -126,7 +146,20 @@ def reg_user(user_id, name, username, apartment_number):
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
 
-        # add new user to the database
+        # check if the user is already registered in this apartment
+        print('Проверяю, что пользователь еще не зарегистрирован')
+        cursor.execute("SELECT apartment FROM Users WHERE user_id = ?", (user_id,))
+        user_check_apt = cursor.fetchall()
+        print(f'Номер квартиры в базе {user_check_apt}, номер введенной квартиры {apartment_number}')
+
+        if user_check_apt is not None:
+            for apt in user_check_apt:
+                print(apartment)
+                if apartment_number == apt[0]:
+                    second_mess = "Вы уже зарегистрированы в этой квартире"
+                    bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+                    return
+            # add new user to the database
         sqlite_insert_query = """INSERT INTO Users
                               (user_id, name, username, apartment)
                               VALUES
@@ -239,7 +272,7 @@ def delete_registration_check(message):
             bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
         else:
             # confirm deletion
-            confirm_deletion(user_id)
+            first_confirm_deletion(user_id)
 
     except sqlite3.Error as error:
         print("Ошибка при подключении к sqlite", error)
@@ -252,16 +285,16 @@ def delete_registration_check(message):
             print("Соединение с SQLite закрыто")
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_deletion_"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("first_confirm_deletion"))
 def callback_confirm_deletion(call):
     print('Сработал обработчик callback_confirm_deletion')
     # User decided to delete registration
-    if call.data == "confirm_deletion_yes":
+    if call.data == "first_confirm_deletion_yes":
         print("Отправляю запрос на номер квартиры")
         bot.send_message(call.from_user.id, "Укажите номер квартиры для удаления. Только номер, без текста:")
         set_user_state(call.from_user.id, "delete_registration")
     # User decided not to delete registration
-    elif call.data == "confirm_deletion_no":
+    elif call.data == "first_confirm_deletion_no":
         print('Пользователь решил не удалять регистрацию')
         user_id = call.from_user.id
         second_mess = "Действие отменено."
@@ -277,36 +310,74 @@ def delete_registration(message):
     print('Сработал обработчик delete_registration')
     # connect to the database
     connection = None
+    user_id = message.from_user.id
     try:
+        apartment_number = int(message.text)
         connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
-        # get information about the user
-        user_id = message.from_user.id
-        apartment_number = int(message.text)
         # check and delete registration
         cursor.execute("SELECT * FROM Users WHERE user_id = ? and apartment = ?", (user_id, apartment_number,))
         if cursor.fetchone() is None:
-            second_mess = 'Извините, вы не зарегистрированы в этой квартире'
-            bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+            message = 'Извините, вы не зарегистрированы в этой квартире'
+            bot.send_message(user_id, message, reply_markup=get_main_menu_markup())
         else:
+            user_deletion_data[user_id] = {'apartment': apartment_number}
+            second_confirm_deletion(user_id, apartment_number)
+        set_user_state(user_id, None)  # Сброс состояния пользователя
+    except ValueError as e:
+        print('Номер квартиры был введен в некорректном формате', e)
+        second_mess = 'Пожалуйста, укажите только номер (число):'
+        bot.send_message(message.from_user.id, second_mess, reply_markup=get_main_menu_markup())
+    except sqlite3.Error as error:
+        print("Ошибка при подключении к sqlite", error)
+        error_mess = 'Произошла ошибка при удалении записи'
+        bot.send_message(user_id, error_mess, reply_markup=get_main_menu_markup())
+
+    finally:
+        if connection:
+            connection.close()
+            print("Соединение с SQLite закрыто")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("second_confirm_deletion"))
+def callback_second_confirm_deletion(call):
+    print("Сработал обработчик: second_confirm_deletion")
+    user_id = call.from_user.id
+    connection = None
+    if call.data == "second_confirm_deletion_yes":
+        print('Пользователь решил подтвердить удаление')
+        data = user_deletion_data[user_id]
+        apartment_number = data['apartment']
+        try:
+            connection = sqlite3.connect(db_path)
+            cursor = connection.cursor()
+            print('База данных подключена к SQLite')
             sql_update_query = """DELETE from Users
                                   where user_id = ? and apartment = ?"""
             cursor.execute(sql_update_query, (user_id, apartment_number,))
             connection.commit()
             second_mess = 'Запись успешно удалена'
             bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+        except sqlite3.Error as error:
+            print("Ошибка при подключении к sqlite", error)
+            second_mess = 'Произошла ошибка при удалении записи'
+            bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
 
-    except sqlite3.Error as error:
-        print("Ошибка при подключении к sqlite", error)
-        second_mess = 'Произошла ошибка при удалении записи'
-        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+        finally:
+            if connection:
+                connection.close()
+                print("Соединение с SQLite закрыто")
 
-    finally:
-        if connection:
-            connection.close()
-            print("Соединение с SQLite закрыто")
-        set_user_state(user_id, None)  # Сброс состояния пользователя
+    elif call.data == "second_confirm_deletion_no":
+        print('Пользователь решил не продолжать удаление')
+        message = "Действие отменено."
+        bot.send_message(user_id, message, reply_markup=get_main_menu_markup())
+    set_user_state(user_id, None)
+    # Deletion of buttons
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                          text=call.message.text,
+                          reply_markup=None)
 
 
 # Handle all messages with content_type 'text' and check if the user is in the group
@@ -338,7 +409,7 @@ def process_user_message(message):
         check_user(message)
     if message.text == '✍️ Регистрация':
         print("Выбрана команда регистрации")
-        ask_apartment(message)
+        registration_check(message)
     if message.text == '🗑️ Удалить регистрацию':
         print("Выбрана команда удалить регистрацию")
         delete_registration_check(message)
