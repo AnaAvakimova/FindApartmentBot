@@ -11,8 +11,8 @@ admin = os.environ.get('ADMIN')
 tg_user_id = os.environ.get('TG_USER_ID')
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-# db_path = os.path.join(dir_path, '../db/ostrov_database.db')
-db_path = os.environ.get('DB_PATH')
+db_path = os.path.join(dir_path, '../db/ostrov_database.db')
+# db_path = os.environ.get('DB_PATH')
 
 USER_STATE = {}  # dictionary for tracking user state
 user_registration_data = {}
@@ -187,9 +187,29 @@ def reg_user(user_id, name, username, apartment_number):
 
 # Find user by their apartment
 def check_user(message):
-    print("Отправляю запрос на номер квартиры")
-    bot.send_message(message.from_user.id, "Укажите номер квартиры соседа. Только номер, без текста и пробелов:")
-    set_user_state(message.from_user.id, "checking_apartment")
+    connection = None
+    user_id = message.from_user.id
+    try:
+        connection = sqlite3.connect(db_path)
+        cursor = connection.cursor()
+        print('База данных подключена к SQLite')
+        cursor.execute("SELECT * FROM Users WHERE user_id = ?", (user_id,))
+        if cursor.fetchone() is None:
+            message = 'Только зарегистрированные пользователи могут получать данные о соседях'
+            bot.send_message(user_id, message, reply_markup=get_main_menu_markup())
+        else:
+            print("Отправляю запрос на номер квартиры")
+            bot.send_message(message.from_user.id,
+                             "Укажите номер квартиры соседа. Только номер, без текста и пробелов:")
+            set_user_state(message.from_user.id, "checking_apartment")
+    except sqlite3.Error as error:
+        print("Ошибка при подключении к sqlite", error)
+        second_mess = 'Произошла ошибка'
+        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+    finally:
+        if connection:
+            connection.close()
+            print("Соединение с SQLite закрыто")
 
 
 @bot.message_handler(func=lambda message: get_user_state(message) == 'checking_apartment')
