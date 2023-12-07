@@ -11,8 +11,7 @@ admin = os.environ.get('ADMIN')
 tg_user_id = os.environ.get('TG_USER_ID')
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-db_path = os.path.join(dir_path, '../db/ostrov_database.db')
-# db_path = os.environ.get('DB_PATH')
+db_path = os.environ.get('DB_PATH')
 
 USER_STATE = {}  # dictionary for tracking user state
 user_registration_data = {}
