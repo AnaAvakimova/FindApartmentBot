@@ -11,9 +11,10 @@ group_id = os.environ.get('CHAT_ID')
 def get_main_menu_markup():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, is_persistent=True)
     button_check = types.KeyboardButton(text='🔍 Найти соседа')
+    markup.row(button_check)
     button_reg = types.KeyboardButton(text='✍️ Регистрация')
     button_del = types.KeyboardButton(text='🗑️ Удалить регистрацию')
-    markup.add(button_check, button_reg, button_del)
+    markup.row(button_reg, button_del)
     return markup
 
 

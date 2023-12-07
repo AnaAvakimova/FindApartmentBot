@@ -22,14 +22,12 @@ apartment = 0
 
 def get_user_state(message):
     print(f"Получение статуса пользователя - {USER_STATE.get(message.from_user.id)}")
-    print(USER_STATE)
     return USER_STATE.get(message.from_user.id)
 
 
 def set_user_state(user_id, state):
     USER_STATE[user_id] = state
     print(f"Установка статуса пользователя - {USER_STATE[user_id]}")
-    print(USER_STATE)
 
 
 def create_db(directory_path):
@@ -37,8 +35,10 @@ def create_db(directory_path):
     if os.path.exists(db_path):
         return
 
+    # Создаю базу данных и подключение к ней
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
+    # Создаю таблицы
     create_table_users = '''CREATE TABLE IF NOT EXISTS USERS (
                         name TEXT,
                         username TEXT,
@@ -59,6 +59,7 @@ def create_db(directory_path):
     except sqlite3.Error as e:
         print(f"Ошибка при создании таблиц: {e}")
     finally:
+        # Закрываю подключение к базе данных
         connection.close()
 
 
@@ -73,7 +74,7 @@ def is_user_member(chat_id, user_id):
 
 # Registration process
 def registration_check(message):
-    print('Запущена функция registration_check')
+    print('Выбрана опция регистрации')
     user_id = message.from_user.id
     first_confirm_registration(user_id)
 
@@ -167,13 +168,14 @@ def reg_user(user_id, name, username, apartment_number):
         values_to_insert = (user_id, name, username, apartment_number)
         cursor.execute(sqlite_insert_query, values_to_insert)
         connection.commit()
+        print('Пользователь успешно зарегистрирован')
         second_mess = 'Пользователь успешно зарегистрирован'
         bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
 
-    except sqlite3.IntegrityError as error:
-        print("Такой пользователь уже зарегистрирован", error)
-        second_mess = 'Вы уже зарегистрированы.'
-        bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
+    # except sqlite3.IntegrityError as error:
+    #     print("Такой пользователь уже зарегистрирован", error)
+    #     second_mess = 'Вы уже зарегистрированы.'
+    #     bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
     except sqlite3.Error as error:
         print("Ошибка при подключении к sqlite", error)
         second_mess = 'Произошла ошибка при регистрации'
@@ -195,6 +197,7 @@ def check_user(message):
         print('База данных подключена к SQLite')
         cursor.execute("SELECT * FROM Users WHERE user_id = ?", (user_id,))
         if cursor.fetchone() is None:
+            print('Запрос отклонен, так как пользователь не зарегистрирован')
             message = 'Только зарегистрированные пользователи могут получать данные о соседях'
             bot.send_message(user_id, message, reply_markup=get_main_menu_markup())
         else:
@@ -216,11 +219,10 @@ def check_user(message):
 def check_apartment(message):
     print("Сработал обработчик: check_apartment")
     connection = None
+    user_id = message.from_user.id
     try:
         print('Запущена функция выдачу данных о квартире')
         apartment_number = int(message.text)
-        user_id = message.from_user.id
-
         connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
@@ -278,13 +280,11 @@ def check_apartment(message):
 def delete_registration_check(message):
     # connect to the database
     connection = None
+    user_id = message.from_user.id
     try:
         connection = sqlite3.connect(db_path)
         cursor = connection.cursor()
         print('База данных подключена к SQLite')
-
-        # get information about the user
-        user_id = message.from_user.id
         # check if user is registered
         cursor.execute("SELECT * FROM Users WHERE user_id = ?", (user_id,))
         if cursor.fetchone() is None:
