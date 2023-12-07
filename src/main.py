@@ -412,10 +412,11 @@ def check_membership(message):
 
 
 def process_user_message(message):
-    print("Тип чата:", message.chat.type)
-    print("Полученное сообщение:", message.text)
     if message.chat.type != 'private':
         return
+
+    print("Тип чата:", message.chat.type)
+    print("Полученное сообщение:", message.text)
 
     if message.text == '/start':
         print("Выбрана команда старт")
