@@ -3,7 +3,7 @@ import os
 import sqlite3
 from menu import get_main_menu_markup, first_confirm_deletion, second_confirm_deletion, first_confirm_registration, \
     second_confirm_registration
-import re
+from telebot import formatting
 
 bot_key = os.environ.get('TELEBOT_KEY')
 bot = telebot.TeleBot(bot_key)
@@ -172,10 +172,6 @@ def reg_user(user_id, name, username, apartment_number):
         second_mess = 'Пользователь успешно зарегистрирован'
         bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
 
-    # except sqlite3.IntegrityError as error:
-    #     print("Такой пользователь уже зарегистрирован", error)
-    #     second_mess = 'Вы уже зарегистрированы.'
-    #     bot.send_message(user_id, second_mess, reply_markup=get_main_menu_markup())
     except sqlite3.Error as error:
         print("Ошибка при подключении к sqlite", error)
         second_mess = 'Произошла ошибка при регистрации'
@@ -256,10 +252,10 @@ def check_apartment(message):
         else:
 
             for person in user_data:
-                mess = f"{person[0]} \- {person[1]}"
-                mess_to_send = mess.replace('_', '\_')
-                print(mess_to_send)
+                mess = f"{person[0]} - {person[1]}"
+                mess_to_send = formatting.escape_markdown(mess)
                 bot.send_message(user_id, mess_to_send, parse_mode='MarkdownV2', reply_markup=get_main_menu_markup())
+            set_user_state(user_id, None)  # Сброс состояния пользователя
 
     except sqlite3.Error as error:
         print("Ошибка при подключении к sqlite", error)
@@ -275,7 +271,7 @@ def check_apartment(message):
         if connection:
             connection.close()
             print("Соединение с SQLite закрыто")
-        set_user_state(user_id, None)  # Сброс состояния пользователя
+
 
 
 # Delete registration
