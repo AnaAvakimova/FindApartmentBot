@@ -3,6 +3,7 @@ import os
 import sqlite3
 from menu import get_main_menu_markup, first_confirm_deletion, second_confirm_deletion, first_confirm_registration, \
     second_confirm_registration
+import re
 
 bot_key = os.environ.get('TELEBOT_KEY')
 bot = telebot.TeleBot(bot_key)
@@ -255,8 +256,10 @@ def check_apartment(message):
         else:
 
             for person in user_data:
-                mess = f"{person[0]} - {person[1]}"
-                bot.send_message(user_id, mess, parse_mode='Markdown', reply_markup=get_main_menu_markup())
+                mess = f"{person[0]} \- {person[1]}"
+                mess_to_send = mess.replace('_', '\_')
+                print(mess_to_send)
+                bot.send_message(user_id, mess_to_send, parse_mode='MarkdownV2', reply_markup=get_main_menu_markup())
 
     except sqlite3.Error as error:
         print("Ошибка при подключении к sqlite", error)
